@@ -86,6 +86,8 @@ input:focus,select:focus,button:focus-visible{outline:3px solid var(--gold);outl
 .cat{position:absolute;right:max(4px,env(safe-area-inset-right));top:calc(env(safe-area-inset-top) + 8px);width:96px;height:110px;z-index:1;overflow:visible}
 .cat .swing{transform-origin:60px 30px;animation:swing 4.5s ease-in-out infinite}
 @keyframes swing{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
+.music{position:fixed;left:max(16px,calc(50% - 264px));bottom:calc(env(safe-area-inset-bottom) + 22px);width:46px;height:46px;border-radius:50%;border:1.5px solid var(--chipLine);background:var(--card);color:var(--pine);display:grid;place-items:center;cursor:pointer;z-index:3;box-shadow:0 6px 16px -8px rgba(0,0,0,.35)}
+.music[aria-pressed=false]{color:var(--mute)}.music[aria-pressed=false] .on{display:none}.music[aria-pressed=true] .off{display:none}
 #snow{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
 header{z-index:0}.drink,.who,.chips,.list,#out .empty{position:relative;z-index:2}
 .fab{z-index:3}.scrim{z-index:4}.sheet{z-index:5}.toast{z-index:6}
@@ -151,6 +153,7 @@ const FIREBASE_CONFIG = {
 </div>
 
 <button class="fab" id="fab" type="button"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 2v14M2 9h14" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>Novo item</button>
+<button class="music" id="music" type="button" aria-pressed="false" aria-label="Música de Natal"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3" fill="currentColor"/><circle cx="17" cy="16" r="3" fill="currentColor"/><path class="off" d="M3 3l18 18"/></svg></button>
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div id="sheetBody"></div></div>
 <div class="toast" id="toast"></div>
@@ -384,6 +387,30 @@ async function getDb(){
   raf=requestAnimationFrame(tick)}
  function go(){cancelAnimationFrame(raf);if(rm.matches||document.hidden){x.clearRect(0,0,W,H);return}raf=requestAnimationFrame(tick)}
  size();go();addEventListener("resize",size);document.addEventListener("visibilitychange",go);rm.addEventListener?.("change",go);}
+
+/* música: Deck the Halls (domínio público), baixinha */
+{const b=document.getElementById("music");let ctx=null,master=null,timer=0,next=0,idx=0,on=false,bar=0,barT=0;
+ let pref="on";try{pref=localStorage.getItem("ceia_musica")||"on"}catch(e){}
+ const F=n=>440*Math.pow(2,(n-69)/12);const B4=71,C5=72,D5=74,E5=76,F5=77,Fs5=78,G5=79,A5=81,B5=83,C6=84;
+ const L1=[[G5,1.5],[F5,.5],[E5,1],[D5,1],[C5,1],[D5,1],[E5,1],[C5,1],[D5,.5],[E5,.5],[F5,.5],[D5,.5],[E5,1.5],[D5,.5],[C5,1],[B4,1],[C5,2]];
+ const MEL=[...L1,...L1,[D5,1.5],[E5,.5],[F5,1],[D5,1],[E5,1.5],[F5,.5],[G5,1],[D5,1],[E5,.5],[Fs5,.5],[G5,1],[A5,.5],[B5,.5],[C6,1],[B5,1],[A5,1],[G5,2],
+  [G5,1.5],[F5,.5],[E5,1],[D5,1],[C5,1],[D5,1],[E5,1],[C5,1],[A5,.5],[A5,.5],[A5,.5],[A5,.5],[G5,1.5],[F5,.5],[E5,1],[D5,1],[C5,2],[0,4]];
+ const BASS=[48,48,43,48,48,48,43,48,43,48,50,43,48,48,53,48,0];
+ const beat=60/132;
+ function tone(f,t,d,v,mel){const L=Math.max(.35,d*1.3),o=ctx.createOscillator(),o2=ctx.createOscillator(),g=ctx.createGain(),g2=ctx.createGain();
+  o.type="sine";o2.type="sine";o.frequency.value=f;o2.frequency.value=f*2;g2.gain.value=mel?.35:.3;o2.connect(g2).connect(g);o.connect(g);g.connect(master);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.006);g.gain.exponentialRampToValueAtTime(.0008,t+(mel?L:.7));
+  o.start(t);o2.start(t);o.stop(t+L+.05);o2.stop(t+L+.05)}
+ function sched(){while(next<ctx.currentTime+.6){const [n,d]=MEL[idx];if(n)tone(F(n),next,d*beat,.42,true);
+   let rem=d;while(rem>0){if(barT<=0){const bn=BASS[bar%BASS.length];if(bn)for(let k=0;k<4;k++)tone(F(k%2?bn+7:bn),next+(d-rem)*beat+k*beat,beat*.9,k?.18:.26,false);bar++;barT=4}const s=Math.min(rem,barT);barT-=s;rem-=s}
+   next+=d*beat;idx++;if(idx>=MEL.length){idx=0;bar=0;barT=0}}}
+ function start(){try{if(!ctx){ctx=new (window.AudioContext||window.webkitAudioContext)();master=ctx.createGain();master.gain.value=.05;master.connect(ctx.destination)}
+  ctx.resume();if(!on){on=true;next=ctx.currentTime+.15;clearInterval(timer);timer=setInterval(sched,150);sched()}b.setAttribute("aria-pressed","true")}catch(e){}}
+ function stop(){on=false;clearInterval(timer);if(ctx)ctx.suspend();b.setAttribute("aria-pressed","false")}
+ b.addEventListener("click",e=>{e.stopPropagation();if(on){stop();pref="off"}else{start();pref="on"}try{localStorage.setItem("ceia_musica",pref)}catch(x){}});
+ const first=()=>{document.removeEventListener("pointerdown",first,true);if(pref==="on"&&!on)start()};
+ document.addEventListener("pointerdown",first,true);
+ document.addEventListener("visibilitychange",()=>{if(!ctx)return;if(document.hidden)ctx.suspend();else if(on)ctx.resume()});}
 }
 </script>
 </body>
